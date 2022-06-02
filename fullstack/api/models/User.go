@@ -3,6 +3,7 @@ package models
 import (
 	"errors"
 	"html"
+	"log"
 	"strings"
 	"time"
 
@@ -60,12 +61,9 @@ func (u *User) Validate(action string) error{
 		if err := checkmail.ValidateFormat(u.Email); err != nil{
 			return errors.New("Invalid Email")
 		}
-
 		return nil
+
 	case "login":
-		if u.Nickname==""{
-			return errors.New("Required Nickname")
-		}
 		if u.Password==""{
 			return errors.New("Required password")
 		}
@@ -75,7 +73,21 @@ func (u *User) Validate(action string) error{
 		if err := checkmail.ValidateFormat(u.Email); err != nil{
 			return errors.New("Invalid Email")
 		}
+		return nil
 
+	default:
+		if u.Nickname==""{
+			return errors.New("Required Nickname")
+		}
+		if u.Password==""{
+			return errors.New("Required Password")
+		}
+		if u.Email==""{
+			return errors.New("Required Email")
+		}
+		if err:= checkmail.ValidateFormat(u.Email); err != nil{
+			return errors.New("Invalid Email")
+		}
 		return nil
 	}
 }
@@ -89,3 +101,52 @@ func (u *User) SaveUser(db *gorm.DB)(*User, error){
 	return u, nil
 }
 
+func (u *User) FindAllUsers(db *gorm.DB)(*[]User, error){
+	var err error
+	users := []User{}
+	err = db.Debug().Model(&User{}).Limit(100).Find(&users).Error
+	if err!= nil{
+		return &[]User{}, err
+	}
+	return &users, err
+}
+
+func (u *User) FindUserByID(db *gorm.DB, uid uint32)(*User, error){
+	var err error
+	err = db.Debug().Model(User{}).Where("id = ?",uid).Take(&u).Error
+	if err != nil{
+		return &User{}, err
+	}
+	if gorm.IsRecordNotFoundError(err){
+		return &User{}, errors.New("User Not Found")
+	}
+	return u, err
+}
+
+func(u *User) UdpateAUser(db *gorm.DB, uid uint32)(*User, error){
+	//To hash the password
+	err := u.BeforeSave()
+	if err != nil{
+		log.Fatal(err)
+	}
+	db = db.Debug().Model(&User{}).Where("id = ?", uid).Take(&User{}).UpdateColumns(
+		map[string]interface{}{
+			"password": u.Password,
+			"nickname": u.Nickname,
+			"email": u.Email,
+			"updated_at": time.Now(),
+		},
+	)
+	if db.Error != nil{
+		return &User{},err
+	}
+	return u, nil
+}
+
+func (u *User)DeleteAUser(db *gorm.DB,uid uint32)(int64, error){
+	db = db.Debug().Model(&User{}).Where("id = ?", uid).Take(&User{}).Delete(&User{})
+	if db.Error!= nil{
+		return 0, db.Error
+	}
+	return db.RowsAffected, nil
+}
